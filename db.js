@@ -274,11 +274,32 @@ async function getHistoryForMap(code, table, limitDays = 7) {
     return allRecords;
 }
 
+async function closeAll() {
+    console.log("Closing databases and checkpointing WAL...");
+    const closePromises = [];
+    
+    // Close daily DBs
+    for (const key in dailyDbs) {
+        closePromises.push(new Promise((resolve) => {
+            dailyDbs[key].close(() => resolve());
+        }));
+    }
+    
+    // Close master DB
+    closePromises.push(new Promise((resolve) => {
+        masterDb.close(() => resolve());
+    }));
+    
+    await Promise.all(closePromises);
+    console.log("Databases securely closed.");
+}
+
 module.exports = {
     initMasterDB,
     upsertMap,
     getAllMaps,
     updateMapLatestMetrics,
     upsertMetricRecord,
-    getHistoryForMap
+    getHistoryForMap,
+    closeAll
 };
