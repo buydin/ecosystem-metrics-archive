@@ -1,4 +1,5 @@
 name: Fortnite Ecosystem Scraper
+run-name: 🚀 Ecosystem Scrape - ${{ github.event_name }} - ${{ github.run_id }}
 
 on:
   schedule:
@@ -15,6 +16,7 @@ concurrency:
 
 jobs:
   scrape:
+    name: 🏃‍♂️ Data Extraction Pipeline
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
