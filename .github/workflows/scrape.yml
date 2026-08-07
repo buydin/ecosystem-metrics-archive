@@ -1,0 +1,58 @@
+name: Fortnite Ecosystem Scraper
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write # Needed to create releases
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Download Previous Databases (If Exist)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p db
+          # Try to download maps.db from the most recent release
+          gh release download --pattern "maps.db" -D db || echo "No previous maps.db found, starting fresh."
+          
+          # Try to download today's metrics DB if it already exists (e.g. from the 1st run of the day)
+          TODAY=$(date -u +"%Y-%m-%d")
+          gh release download --pattern "metrics_${TODAY}.db" -D db || echo "No previous metrics DB found for today."
+
+      - name: Run Scraper (CLI)
+        run: node cli.js
+
+      - name: Create or Update Daily Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+          TAG="v${TODAY}"
+          
+          # Check if release for today already exists
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG exists. Updating assets..."
+            # Upload (and overwrite) the latest DBs
+            gh release upload "$TAG" db/maps.db db/metrics_${TODAY}.db --clobber
+          else
+            echo "Creating new release $TAG..."
+            gh release create "$TAG" db/maps.db db/metrics_${TODAY}.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
+          fi

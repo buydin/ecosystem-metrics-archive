@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fortnite Ecosystem Analytics</title>
+    <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #121214;
+            --surface: #1e1e24;
+            --primary: #ffcc00;
+            --text-light: #ffffff;
+            --text-dim: #a0a0a0;
+            --border: #333333;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-light);
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        header {
+            background: var(--surface);
+            padding: 20px 40px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            font-family: 'Luckiest Guy', cursive;
+            color: var(--primary);
+            margin: 0;
+            font-size: 2rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 40px;
+        }
+
+        /* Controls */
+        .controls {
+            display: flex;
+            gap: 20px;
+            background: var(--surface);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            align-items: center;
+        }
+
+        .controls select, .controls input {
+            background: var(--bg-color);
+            border: 1px solid var(--border);
+            color: var(--text-light);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+        }
+
+        .controls select:focus, .controls input:focus {
+            border-color: var(--primary);
+        }
+        
+        .btn {
+            background: var(--primary);
+            color: #000;
+            border: none;
+            padding: 12px 24px;
+            font-weight: 900;
+            border-radius: 8px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(255,204,0,0.3);
+        }
+
+        /* Table */
+        .table-container {
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            font-weight: 900;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        tbody tr {
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        tbody tr:hover {
+            background: rgba(255,204,0,0.05);
+        }
+        
+        .code-col {
+            font-family: monospace;
+            color: var(--primary);
+        }
+
+        /* Modal */
+        #modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        .modal-content {
+            background: var(--bg-color);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 40px;
+            width: 100%;
+            max-width: 1200px;
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            position: relative;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: transparent;
+            border: none;
+            color: var(--text-light);
+            font-size: 2rem;
+            cursor: pointer;
+        }
+
+        .chart-container {
+            flex: 1;
+            width: 100%;
+            min-height: 400px;
+            margin-top: 20px;
+        }
+        
+        .modal-header h2 {
+            margin: 0;
+            font-family: 'Luckiest Guy', cursive;
+            color: var(--primary);
+            font-size: 2.5rem;
+            letter-spacing: 1px;
+        }
+        .modal-header p {
+            color: var(--text-dim);
+            margin: 5px 0 0 0;
+            font-size: 1.1rem;
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-card span {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            font-weight: 900;
+        }
+        .stat-card strong {
+            font-size: 1.5rem;
+            color: var(--primary);
+            font-family: 'Luckiest Guy', cursive;
+        }
+        
+        .chart-controls {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+            align-items: center;
+        }
+
+        .interval-toggles {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .dataset-toggles {
+            display: flex;
+            gap: 15px;
+            font-size: 0.9rem;
+        }
+        .dataset-toggles label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+        }
+        
+        .interval-btn {
+            background: var(--surface);
+            color: var(--text-light);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        
+        .interval-btn.active {
+            background: var(--primary);
+            color: #000;
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Ecosystem Analytics</h1>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <input type="date" id="export-date" class="btn" style="background: var(--surface); color: var(--text-light);" title="Select date to export">
+            <button class="btn" onclick="exportDb()">Export DB</button>
+            <button class="btn" onclick="triggerScrape('discovery')">Run Discovery</button>
+            <button class="btn" onclick="triggerScrape('metrics')">Run Metrics</button>
+        </div>
+    </header>
+
+    <div class="container">
+        
+        <div class="controls">
+            <select id="category-filter" onchange="fetchMaps()">
+                <option value="">All Categories</option>
+                <option value="Star Wars">Star Wars</option>
+                <option value="FALL GUYS">Fall Guys</option>
+                <option value="LEGO">LEGO</option>
+                <option value="TMNT">TMNT</option>
+                <option value="SQUID GAME">Squid Game</option>
+            </select>
+            <input type="text" id="tag-filter" placeholder="Filter by Tag (e.g. tycoon)" onkeyup="if(event.key === 'Enter') fetchMaps()">
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Map Code</th>
+                        <th>Title</th>
+                        <th>Creator</th>
+                        <th>Category</th>
+                        <th>Peak CCU</th>
+                        <th>Favorites</th>
+                        <th>Plays</th>
+                        <th>Unique</th>
+                        <th>Avg Mins</th>
+                        <th>Engine</th>
+                    </tr>
+                </thead>
+                <tbody id="map-tbody">
+                    <!-- Data injected here -->
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+
+    <!-- Chart Modal -->
+    <div id="modal">
+        <div class="modal-content">
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+            <div class="modal-header">
+                <h2 id="modal-title">Map Title</h2>
+                <p id="modal-code">1234-5678-9012</p>
+            </div>
+            
+            <div class="stat-grid" id="modal-stats">
+                <!-- Injected Stats -->
+            </div>
+            
+            <div class="chart-controls">
+                <div class="interval-toggles">
+                    <button class="interval-btn" onclick="loadChart('minute')">Minute</button>
+                    <button class="interval-btn active" id="btn-hour" onclick="loadChart('hour')">Hour</button>
+                    <button class="interval-btn" onclick="loadChart('day')">Day</button>
+                </div>
+                <div class="dataset-toggles">
+                    <label><input type="checkbox" id="toggle-ccu" checked onchange="updateChartDatasets()"> CCU</label>
+                    <label><input type="checkbox" id="toggle-plays" checked onchange="updateChartDatasets()"> Plays</label>
+                    <label><input type="checkbox" id="toggle-favs" onchange="updateChartDatasets()"> Favorites</label>
+                    <label><input type="checkbox" id="toggle-unique" onchange="updateChartDatasets()"> Unique Players</label>
+                    <label><input type="checkbox" id="toggle-recs" onchange="updateChartDatasets()"> Recommendations</label>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="metricsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentChart = null;
+        let currentMapCode = null;
+
+        async function triggerScrape(type) {
+            alert(`Triggering ${type} scrape in background. Check server console.`);
+            await fetch(`/api/scrape/${type}`, { method: 'POST' });
+        }
+
+        async function exportDb() {
+            const date = document.getElementById('export-date').value;
+            if (!date) return alert("Please select a date to export.");
+            window.location.href = `/api/export/${date}`;
+        }
+
+        async function fetchMaps() {
+            const cat = document.getElementById('category-filter').value;
+            const tag = document.getElementById('tag-filter').value;
+            
+            let url = '/api/maps?limit=100'; // Keep simple for now
+            if (cat) url += `&category=${encodeURIComponent(cat)}`;
+            if (tag) url += `&tag=${encodeURIComponent(tag)}`;
+
+            const res = await fetch(url);
+            const json = await res.json();
+            
+            const tbody = document.getElementById('map-tbody');
+            tbody.innerHTML = '';
+            
+            json.data.forEach(map => {
+                const tr = document.createElement('tr');
+                tr.onclick = () => openModal(map.code, map.title);
+                tr.innerHTML = `
+                    <td class="code-col">${map.code}</td>
+                    <td style="font-weight: bold;">${map.title || 'Unknown'}</td>
+                    <td>${map.creatorCode || 'N/A'}</td>
+                    <td>${map.category || 'N/A'}</td>
+                    <td style="color: #ffcc00; font-weight: 900;">${(map.latest_peak_ccu || 0).toLocaleString()}</td>
+                    <td style="color: #ff0055;">${(map.latest_favorites || 0).toLocaleString()}</td>
+                    <td style="color: #00ccff;">${(map.latest_plays || 0).toLocaleString()}</td>
+                    <td style="color: #00ffcc;">${(map.latest_unique_players || 0).toLocaleString()}</td>
+                    <td style="color: #aaa;">${(map.latest_avg_minutes || 0).toFixed(1)}</td>
+                    <td><span style="background: rgba(255,255,255,0.1); padding: 4px 8px; border-radius: 4px; font-size: 0.8rem;">${map.createdIn || 'N/A'}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function openModal(code, title) {
+            currentMapCode = code;
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-code').textContent = code;
+            document.getElementById('modal').style.display = 'flex';
+            loadChart('hour'); // default
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        let globalChartData = [];
+
+        async function loadChart(interval) {
+            // Update toggle buttons
+            document.querySelectorAll('.interval-btn').forEach(b => {
+                b.classList.remove('active');
+                if (b.textContent.toLowerCase() === interval) b.classList.add('active');
+            });
+
+            // Fetch data
+            const res = await fetch(`/api/maps/${currentMapCode}/history?interval=${interval}&days=7`);
+            const json = await res.json();
+            globalChartData = json.data;
+            
+            // Populate Stat Cards with the LATEST record
+            if (globalChartData.length > 0) {
+                const latest = globalChartData[globalChartData.length - 1];
+                document.getElementById('modal-stats').innerHTML = `
+                    <div class="stat-card"><span>Latest CCU</span><strong>${(latest.peak_ccu || 0).toLocaleString()}</strong></div>
+                    <div class="stat-card"><span>Total Plays</span><strong>${(latest.plays || 0).toLocaleString()}</strong></div>
+                    <div class="stat-card"><span>Unique Players</span><strong>${(latest.unique_players || 0).toLocaleString()}</strong></div>
+                    <div class="stat-card"><span>Favorites</span><strong>${(latest.favorites || 0).toLocaleString()}</strong></div>
+                    <div class="stat-card"><span>Avg Minutes</span><strong>${(latest.average_minutes_per_player || 0).toFixed(1)}</strong></div>
+                `;
+            } else {
+                document.getElementById('modal-stats').innerHTML = '<div class="stat-card"><span>Status</span><strong>No Data Yet</strong></div>';
+            }
+
+            renderChart();
+        }
+
+        function updateChartDatasets() {
+            if(currentChart) renderChart();
+        }
+
+        function renderChart() {
+            const data = globalChartData;
+            const labels = data.map(d => new Date(d.timestamp).toLocaleString());
+            
+            const datasets = [];
+            
+            if (document.getElementById('toggle-ccu').checked) {
+                datasets.push({
+                    label: 'Peak CCU',
+                    data: data.map(d => d.peak_ccu || 0),
+                    borderColor: '#ffcc00',
+                    backgroundColor: 'rgba(255, 204, 0, 0.1)',
+                    borderWidth: 3, fill: true, tension: 0.4, yAxisID: 'y'
+                });
+            }
+            if (document.getElementById('toggle-plays').checked) {
+                datasets.push({
+                    label: 'Plays',
+                    data: data.map(d => d.plays || 0),
+                    borderColor: '#00ccff',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2, borderDash: [5, 5], tension: 0.4, yAxisID: 'y1'
+                });
+            }
+            if (document.getElementById('toggle-favs').checked) {
+                datasets.push({
+                    label: 'Favorites',
+                    data: data.map(d => d.favorites || 0),
+                    borderColor: '#ff0055',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2, tension: 0.4, yAxisID: 'y1'
+                });
+            }
+            if (document.getElementById('toggle-unique').checked) {
+                datasets.push({
+                    label: 'Unique Players',
+                    data: data.map(d => d.unique_players || 0),
+                    borderColor: '#00ffcc',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2, tension: 0.4, yAxisID: 'y1'
+                });
+            }
+            if (document.getElementById('toggle-recs').checked) {
+                datasets.push({
+                    label: 'Recommendations',
+                    data: data.map(d => d.recommendations || 0),
+                    borderColor: '#cc00ff',
+                    backgroundColor: 'transparent',
+                    borderWidth: 2, tension: 0.4, yAxisID: 'y1'
+                });
+            }
+
+            if (currentChart) currentChart.destroy();
+
+            const ctx = document.getElementById('metricsChart').getContext('2d');
+            currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#fff', font: { family: 'Inter', size: 14 } } },
+                        tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', titleFont: { size: 14 }, bodyFont: { size: 14 } }
+                    },
+                    scales: {
+                        x: { 
+                            grid: { color: '#333' }, 
+                            ticks: { color: '#aaa', maxTicksLimit: 10 } 
+                        },
+                        y: { 
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            grid: { color: '#333' }, 
+                            ticks: { color: '#aaa' } 
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false }, 
+                            ticks: { color: '#00ccff' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Init
+        fetchMaps();
+    </script>
+</body>
+</html>
