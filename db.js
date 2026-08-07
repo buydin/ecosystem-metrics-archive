@@ -294,6 +294,16 @@ async function closeAll() {
     console.log("Databases securely closed.");
 }
 
+async function getMapsProcessedToday(dateString) {
+    const db = getDailyDb(dateString);
+    try {
+        const records = await allQuery(db, `SELECT DISTINCT map_code FROM metrics_day`);
+        return records.map(r => r.map_code);
+    } catch (e) {
+        return [];
+    }
+}
+
 module.exports = {
     initMasterDB,
     upsertMap,
@@ -301,5 +311,6 @@ module.exports = {
     updateMapLatestMetrics,
     upsertMetricRecord,
     getHistoryForMap,
+    getMapsProcessedToday,
     closeAll
 };

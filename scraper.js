@@ -272,7 +272,17 @@ async function runFullPipeline() {
     
     // STEP 4: Metrics for Discovered
     const allMaps = await db.getAllMaps();
-    const discoveredCodes = allMaps.map(m => m.code).filter(c => !rankedMapCodes.includes(c));
+    let discoveredCodes = allMaps.map(m => m.code).filter(c => !rankedMapCodes.includes(c));
+    
+    // Auto-Resume: Filter out maps we already checked today!
+    const today = new Date().toISOString().split('T')[0];
+    const processedToday = await db.getMapsProcessedToday(today);
+    const processedSet = new Set(processedToday);
+    
+    const originalCount = discoveredCodes.length;
+    discoveredCodes = discoveredCodes.filter(c => !processedSet.has(c));
+    console.log(`[Auto-Resume] Filtered out ${originalCount - discoveredCodes.length} maps already processed today.`);
+    
     await runMetricsForMapCodes(discoveredCodes, 'Discovered Maps');
     
     console.log(`=== PIPELINE COMPLETE ===`);
