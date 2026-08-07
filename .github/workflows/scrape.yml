@@ -49,14 +49,14 @@ jobs:
             globalRankings.json
           retention-days: 1
 
-  track-b:
-    name: 🥈 Track B (Swarm Shard ${{ matrix.shard }})
+  track-b-genres:
+    name: 🥈 Track B (Genre Swarm ${{ matrix.shard }})
     needs: track-a
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -82,16 +82,13 @@ jobs:
           mv maps.db db/maps.db || echo "maps.db not in root"
 
       - name: Run Track B Genres
-        run: node cli.js track-b-genres 10 ${{ matrix.shard }}
-
-      - name: Run Track B Discovery
-        run: node cli.js track-b-discovery 10 ${{ matrix.shard }}
+        run: node cli.js track-b-genres 9 ${{ matrix.shard }}
 
       - name: Rename Daily Metrics DB to Shard DB
         run: |
           TODAY=$(date -u +"%Y-%m-%d")
           if [ -f "db/metrics_${TODAY}.db" ]; then
-            mv "db/metrics_${TODAY}.db" "db/shard_${{ matrix.shard }}.db"
+            mv "db/metrics_${TODAY}.db" "db/shard_genre_${{ matrix.shard }}.db"
           else
             echo "No metrics DB created for today."
           fi
@@ -99,14 +96,66 @@ jobs:
       - name: Upload Shard DB
         uses: actions/upload-artifact@v4
         with:
-          name: shard-${{ matrix.shard }}
-          path: db/shard_${{ matrix.shard }}.db
+          name: shard-genre-${{ matrix.shard }}
+          path: db/shard_genre_${{ matrix.shard }}.db
+          if-no-files-found: ignore
+          retention-days: 1
+
+  track-b-discovery:
+    name: 🥈 Track B (Discovery Swarm ${{ matrix.shard }})
+    needs: track-a
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Download Track A Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: track-a-artifacts
+          path: .
+
+      - name: Move maps.db to db folder
+        run: |
+          mkdir -p db
+          mv maps.db db/maps.db || echo "maps.db not in root"
+
+      - name: Run Track B Discovery
+        run: node cli.js track-b-discovery 9 ${{ matrix.shard }}
+
+      - name: Rename Daily Metrics DB to Shard DB
+        run: |
+          TODAY=$(date -u +"%Y-%m-%d")
+          if [ -f "db/metrics_${TODAY}.db" ]; then
+            mv "db/metrics_${TODAY}.db" "db/shard_discovery_${{ matrix.shard }}.db"
+          else
+            echo "No metrics DB created for today."
+          fi
+
+      - name: Upload Shard DB
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-discovery-${{ matrix.shard }}
+          path: db/shard_discovery_${{ matrix.shard }}.db
           if-no-files-found: ignore
           retention-days: 1
 
   track-c:
     name: 🥉 Track C (Aggregator)
-    needs: track-b
+    needs: [track-b-genres, track-b-discovery]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
