@@ -30,8 +30,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p db
-          # Try to download maps.db from the most recent release
-          gh release download --pattern "maps.db" -D db || echo "No previous maps.db found, starting fresh."
+          # Try to download EcosystemMaster.db from the most recent release and rename it to maps.db for the scraper
+          gh release download --pattern "EcosystemMaster.db" -D db && mv db/EcosystemMaster.db db/maps.db || echo "No previous EcosystemMaster.db found, starting fresh."
           
           # Try to download today's metrics DB if it already exists (e.g. from the 1st run of the day)
           TODAY=$(date -u +"%Y-%m-%d")
@@ -44,6 +44,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          node splitDb.js
+          
           TODAY=$(date -u +"%Y-%m-%d")
           TAG="v${TODAY}"
           
@@ -51,8 +53,8 @@ jobs:
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG exists. Updating assets..."
             # Upload (and overwrite) the latest DBs
-            gh release upload "$TAG" db/maps.db db/metrics_${TODAY}.db --clobber
+            gh release upload "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_${TODAY}.db --clobber
           else
             echo "Creating new release $TAG..."
-            gh release create "$TAG" db/maps.db db/metrics_${TODAY}.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
+            gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_${TODAY}.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
           fi
