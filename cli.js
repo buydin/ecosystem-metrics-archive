@@ -1,7 +1,7 @@
 const db = require('./db');
 const scraper = require('./scraper');
 
-const MAX_EXECUTION_TIME_MS = 5.5 * 60 * 60 * 1000; // 5.5 hours
+const MAX_EXECUTION_TIME_MS = 10 * 60 * 1000; // 10 minutes (FOR TESTING)
 
 async function run() {
     console.log("Initializing Master DB...");
