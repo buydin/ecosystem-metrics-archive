@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write # Needed to create releases
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
