@@ -3,20 +3,19 @@ run-name: 🚀 Ecosystem Scrape - ${{ github.event_name }} - ${{ github.run_id }
 
 on:
   schedule:
-    # Run every 6 hours
     - cron: '0 */6 * * *'
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch:
 
 permissions:
-  contents: write # Needed to create releases
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
-  scrape:
-    name: 🏃‍♂️ Data Extraction Pipeline
+  track-a:
+    name: 🥇 Track A (Coordinator)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -31,22 +30,119 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
-      - name: Download Previous Databases (If Exist)
+      - name: Download Previous Databases
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p db
-          # Try to download EcosystemMaster.db from the most recent release and rename it to maps.db for the scraper
-          gh release download --pattern "EcosystemMaster.db" -D db && mv db/EcosystemMaster.db db/maps.db || echo "No previous EcosystemMaster.db found, starting fresh."
-          
-          # Try to download today's metrics DB if it already exists (e.g. from the 1st run of the day)
+          gh release download --pattern "EcosystemMaster.db" -D db && mv db/EcosystemMaster.db db/maps.db || echo "No DB found"
+
+      - name: Run Track A
+        run: node cli.js track-a
+
+      - name: Upload Master DB and Rankings
+        uses: actions/upload-artifact@v4
+        with:
+          name: track-a-artifacts
+          path: |
+            db/maps.db
+            globalRankings.json
+          retention-days: 1
+
+  track-b:
+    name: 🥈 Track B (Swarm Shard ${{ matrix.shard }})
+    needs: track-a
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Download Track A Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: track-a-artifacts
+          path: .
+
+      - name: Move maps.db to db folder
+        run: |
+          mkdir -p db
+          mv maps.db db/maps.db || echo "maps.db not in root"
+
+      - name: Run Track B Genres
+        run: node cli.js track-b-genres 10 ${{ matrix.shard }}
+
+      - name: Run Track B Discovery
+        run: node cli.js track-b-discovery 10 ${{ matrix.shard }}
+
+      - name: Rename Daily Metrics DB to Shard DB
+        run: |
           TODAY=$(date -u +"%Y-%m-%d")
-          gh release download --pattern "metrics_${TODAY}.db" -D db || echo "No previous metrics DB found for today."
+          if [ -f "db/metrics_${TODAY}.db" ]; then
+            mv "db/metrics_${TODAY}.db" "db/shard_${{ matrix.shard }}.db"
+          else
+            echo "No metrics DB created for today."
+          fi
 
-      - name: Run Scraper (CLI)
-        run: node cli.js
+      - name: Upload Shard DB
+        uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: db/shard_${{ matrix.shard }}.db
+          if-no-files-found: ignore
+          retention-days: 1
 
-      - name: Create or Update Daily Release
+  track-c:
+    name: 🥉 Track C (Aggregator)
+    needs: track-b
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Download Track A Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: track-a-artifacts
+          path: .
+
+      - name: Move maps.db to db folder
+        run: |
+          mkdir -p db
+          mv maps.db db/maps.db || echo "maps.db not in root"
+
+      - name: Download Shard Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: db
+          pattern: shard-*
+          merge-multiple: true
+
+      - name: Merge Shards
+        run: node mergeShards.js
+
+      - name: Split and Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -55,12 +151,12 @@ jobs:
           TODAY=$(date -u +"%Y-%m-%d")
           TAG="v${TODAY}"
           
-          # Check if release for today already exists
+          cp db/maps.db db/EcosystemMaster.db
+          
           if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG exists. Updating assets..."
-            # Upload (and overwrite) the latest DBs
+            echo "Updating release $TAG"
             gh release upload "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_${TODAY}.db --clobber
           else
-            echo "Creating new release $TAG..."
+            echo "Creating release $TAG"
             gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_${TODAY}.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
           fi

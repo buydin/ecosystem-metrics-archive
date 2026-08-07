@@ -1,4 +1,5 @@
 const axios = require('axios');
+const fs = require('fs');
 const db = require('./db');
 
 const API_BASE = 'https://api.fortnite.com/ecosystem/v1';
@@ -162,8 +163,28 @@ async function runDiscoveryPhase() {
 }
 
 async function fetchAndSaveMetrics(code, interval, table) {
+    let attempts = 0;
+    let res = null;
+    while (attempts < 3) {
+        attempts++;
+        try {
+            res = await axios.get(`${API_BASE}/islands/${code}/metrics/${interval}`, { timeout: 15000 });
+            break;
+        } catch (e) {
+            if (attempts === 3) return { success: false, error: e };
+            if (e.response) {
+                if (e.response.status === 429) await sleep(10000);
+                else if (e.response.status === 502) await sleep(5000);
+                else await sleep(2000);
+            } else {
+                await sleep(2000);
+            }
+        }
+    }
+    
+    if (!res || !res.data) return { success: false, error: "No data" };
+    
     try {
-        const res = await axios.get(`${API_BASE}/islands/${code}/metrics/${interval}`);
         const transposed = transposeMetrics(res.data);
         
         let latestMetrics = {
@@ -288,7 +309,55 @@ async function runFullPipeline() {
     console.log(`=== PIPELINE COMPLETE ===`);
 }
 
+
+async function runTrackA() {
+    console.log("=== STARTING TRACK A (Coordinator) ===");
+    await runGenreRankingsPhase();
+    fs.writeFileSync('globalRankings.json', JSON.stringify(globalRankings, null, 2));
+    await runDiscoveryPhase();
+    console.log("=== TRACK A COMPLETE ===");
+}
+
+function chunkArray(array, totalChunks, chunkIndex) {
+    const size = Math.ceil(array.length / totalChunks);
+    const start = chunkIndex * size;
+    return array.slice(start, start + size);
+}
+
+async function runTrackBGenres(total, idx) {
+    console.log(`=== STARTING TRACK B GENRES [${idx}/${total}] ===`);
+    if (fs.existsSync('globalRankings.json')) {
+        globalRankings = JSON.parse(fs.readFileSync('globalRankings.json', 'utf8'));
+    }
+    const rankedMapCodes = Object.keys(globalRankings);
+    const chunk = chunkArray(rankedMapCodes, total, idx);
+    await runMetricsForMapCodes(chunk, 'Ranked Maps');
+    console.log(`=== TRACK B GENRES COMPLETE ===`);
+}
+
+async function runTrackBDiscovery(total, idx) {
+    console.log(`=== STARTING TRACK B DISCOVERY [${idx}/${total}] ===`);
+    if (fs.existsSync('globalRankings.json')) {
+        globalRankings = JSON.parse(fs.readFileSync('globalRankings.json', 'utf8'));
+    }
+    const rankedMapCodes = Object.keys(globalRankings);
+    const allMaps = await db.getAllMaps();
+    let discoveredCodes = allMaps.map(m => m.code).filter(c => !rankedMapCodes.includes(c));
+    
+    const today = new Date().toISOString().split('T')[0];
+    const processedToday = await db.getMapsProcessedToday(today);
+    const processedSet = new Set(processedToday);
+    
+    discoveredCodes = discoveredCodes.filter(c => !processedSet.has(c));
+    const chunk = chunkArray(discoveredCodes, total, idx);
+    await runMetricsForMapCodes(chunk, 'Discovered Maps');
+    console.log(`=== TRACK B DISCOVERY COMPLETE ===`);
+}
+
 module.exports = {
+    runTrackA,
+    runTrackBGenres,
+    runTrackBDiscovery,
     runDiscoveryPhase,
     runGenreRankingsPhase,
     runMetricsPhase: () => runMetricsForMapCodes((Object.keys(globalRankings)), 'Manual Metrics'), // Fallback for old API calls
