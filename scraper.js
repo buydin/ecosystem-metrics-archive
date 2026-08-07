@@ -194,14 +194,21 @@ async function fetchAndSaveMetrics(code, interval, table) {
 async function runMetricsForMapCodes(codes, phaseName) {
     console.log(`--- Starting Metrics Phase: ${phaseName} ---`);
     console.log(`Need to process ${codes.length} maps.`);
+    
+    // Cache known maps to avoid redundant metadata calls
+    const allKnownMaps = await db.getAllMaps();
+    const knownMapCodes = new Set(allKnownMaps.map(m => m.code));
 
     for (let i = 0; i < codes.length; i++) {
         const code = codes[i];
         console.log(`[${i+1}/${codes.length}] Processing ${code}`);
         
-        // Ensure metadata exists
-        await fetchAndSaveIslandMetadata(code);
-        await sleep(250);
+        // Ensure metadata exists (Skip if we already have it in DB)
+        if (!knownMapCodes.has(code)) {
+            await fetchAndSaveIslandMetadata(code);
+            await sleep(250);
+            knownMapCodes.add(code);
+        }
         
         let mapLatestMetrics = { latestCCU: 0, latestFavorites: 0, latestPlays: 0, latestUniquePlayers: 0, latestAvgMinutes: 0 };
         function mergeMetrics(res) {
@@ -226,13 +233,13 @@ async function runMetricsForMapCodes(codes, phaseName) {
             continue; 
         }
 
-        // 3. Minute
-        const minRes = await fetchAndSaveMetrics(code, 'minute', 'metrics_minute');
+        // 3. Fetch Minute and Hour concurrently (2x faster)
+        const [minRes, hrRes] = await Promise.all([
+            fetchAndSaveMetrics(code, 'minute', 'metrics_minute'),
+            fetchAndSaveMetrics(code, 'hour', 'metrics_hour')
+        ]);
+        
         mergeMetrics(minRes);
-        await sleep(250);
-
-        // 4. Hour
-        const hrRes = await fetchAndSaveMetrics(code, 'hour', 'metrics_hour');
         mergeMetrics(hrRes);
         await sleep(250);
         
