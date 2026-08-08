@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   track-a:
@@ -146,12 +146,14 @@ jobs:
           TODAY=$(date -u +"%Y-%m-%d")
           TAG="v${TODAY}"
           
+          # Check if release exists and auto-increment version (v2, v3, etc.)
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            # Find the highest existing version for today
+            COUNT=$(gh release list | grep "$TAG" | wc -l)
+            TAG="${TAG}-v$((COUNT + 1))"
+          fi
+          
           cp db/maps.db db/EcosystemMaster.db
           
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Updating release $TAG"
-            gh release upload "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_*.db --clobber
-          else
-            echo "Creating release $TAG"
-            gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_*.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
-          fi
+          echo "Creating release $TAG"
+          gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_*.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
