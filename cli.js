@@ -39,6 +39,27 @@ async function run() {
     } else if (command === 'track-c') {
         console.log("--- Starting Track C (Aggregator) ---");
         await scraper.runTrackCAggregator();
+    } else if (command === 'webhook') {
+        const url = process.env.DISCORD_WEBHOOK_URL;
+        if (!url) {
+            console.log("No DISCORD_WEBHOOK_URL found. Skipping.");
+        } else {
+            console.log("Sending Discord Webhook...");
+            const allMaps = await db.getAllMaps();
+            const dateStr = new Date().toISOString().split('T')[0];
+            const payload = {
+                content: `🚀 **Ecosystem Scrape Complete!**\n- **Date:** ${dateStr}\n- **Total Maps in DB:** ${allMaps.length}\n- Databases successfully compressed & uploaded to GitHub Releases!`,
+                username: "Fortnite Analytics",
+                avatar_url: "https://fortniteapi.io/images/logo.png"
+            };
+            try {
+                const axios = require('axios');
+                await axios.post(url, payload);
+                console.log("Webhook sent successfully!");
+            } catch (e) {
+                console.error("Failed to send webhook:", e.message);
+            }
+        }
     } else {
         console.log("--- Starting Legacy CLI Scraper Run ---");
         await scraper.runFullPipeline();

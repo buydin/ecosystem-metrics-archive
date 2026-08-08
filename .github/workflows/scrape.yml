@@ -157,3 +157,8 @@ jobs:
           
           echo "Creating release $TAG"
           gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_*.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
+
+      - name: Send Discord Webhook
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: node cli.js webhook
