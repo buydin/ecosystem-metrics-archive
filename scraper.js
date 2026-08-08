@@ -47,8 +47,20 @@ async function fetchAndSaveIslandMetadata(code) {
     try {
         const res = await axios.get(`${API_BASE}/islands/${code}`);
         if (res.data) {
-            await db.upsertMap(res.data);
-            return res.data;
+            let mapData = res.data;
+            
+            // Fetch Image from FCHQ
+            try {
+                const fchqRes = await axios.get(`https://fchq.io/api/v1/map/${code}`, { timeout: 5000 });
+                if (fchqRes.data && fchqRes.data.map && fchqRes.data.map.epicImageUrl) {
+                    mapData.image_url = fchqRes.data.map.epicImageUrl;
+                }
+            } catch(fchqErr) {
+                // Silently fail FCHQ if it rate limits us, don't break the whole scrape!
+            }
+            
+            await db.upsertMap(mapData);
+            return mapData;
         }
     } catch(e) {
         if(e.response && e.response.status !== 404) {

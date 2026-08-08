@@ -50,6 +50,7 @@ async function initMasterDB() {
             category TEXT,
             tags TEXT,
             createdIn TEXT,
+            image_url TEXT,
             latest_peak_ccu INTEGER DEFAULT 0,
             latest_favorites INTEGER DEFAULT 0,
             latest_plays INTEGER DEFAULT 0,
@@ -60,6 +61,9 @@ async function initMasterDB() {
     `);
     
     // Attempt to add columns if they don't exist (for existing DB migration)
+    try { await runQuery(masterDb, `ALTER TABLE maps ADD COLUMN image_url TEXT`); } catch (e) {}
+    
+    // Attempt to add columns if they don't exist (for existing DB migration)
     try { await runQuery(masterDb, `ALTER TABLE maps ADD COLUMN latest_favorites INTEGER DEFAULT 0`); } catch (e) {}
     try { await runQuery(masterDb, `ALTER TABLE maps ADD COLUMN latest_plays INTEGER DEFAULT 0`); } catch (e) {}
     try { await runQuery(masterDb, `ALTER TABLE maps ADD COLUMN latest_unique_players INTEGER DEFAULT 0`); } catch (e) {}
@@ -68,19 +72,20 @@ async function initMasterDB() {
 
 // Map Metadata Functions
 async function upsertMap(mapData) {
-    const { code, title, creatorCode, category, tags, createdIn } = mapData;
+    const { code, title, creatorCode, category, tags, createdIn, image_url } = mapData;
     const tagsStr = Array.isArray(tags) ? JSON.stringify(tags) : tags;
     
     await runQuery(masterDb, `
-        INSERT INTO maps (code, title, creatorCode, category, tags, createdIn)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO maps (code, title, creatorCode, category, tags, createdIn, image_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(code) DO UPDATE SET 
             title = excluded.title,
             creatorCode = excluded.creatorCode,
             category = excluded.category,
             tags = excluded.tags,
-            createdIn = excluded.createdIn
-    `, [code, title, creatorCode, category, tagsStr, createdIn]);
+            createdIn = excluded.createdIn,
+            image_url = excluded.image_url
+    `, [code, title, creatorCode, category, tagsStr, createdIn, image_url]);
 }
 
 async function getAllMaps() {
