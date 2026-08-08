@@ -143,20 +143,26 @@ jobs:
         run: |
           node splitDb.js
           
-          TODAY=$(date -u +"%Y-%m-%d")
-          TAG="v${TODAY}"
-          
-          # Check if release exists and auto-increment version (v2, v3, etc.)
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            # Find the highest existing version for today
-            COUNT=$(gh release list | grep "$TAG" | wc -l)
-            TAG="${TAG}-v$((COUNT + 1))"
-          fi
-          
           cp db/maps.db db/EcosystemMaster.db
           
-          echo "Creating release $TAG"
-          gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_*.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
+          # Loop through every single daily DB and create a separate release for each day!
+          for dbfile in db/metrics_*.db; do
+            # Extract the date (e.g. 2026-08-01) from the filename
+            filename=$(basename "$dbfile")
+            date_str="${filename#metrics_}"
+            date_str="${date_str%.db}"
+            
+            TAG="v${date_str}"
+            
+            # Check if release exists and auto-increment version (v2, v3, etc.)
+            if gh release view "$TAG" > /dev/null 2>&1; then
+              COUNT=$(gh release list | grep "$TAG" | wc -l)
+              TAG="${TAG}-v$((COUNT + 1))"
+            fi
+            
+            echo "Creating release $TAG with its 4 specific DB files..."
+            gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db "$dbfile" --title "Daily Metrics: $date_str" --notes "Automated ecosystem scrape for $date_str."
+          done
 
       - name: Send Discord Webhook
         env:
