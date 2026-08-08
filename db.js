@@ -111,6 +111,10 @@ async function updateMapLatestMetrics(code, metrics) {
     ]);
 }
 
+async function updateMapImage(code, imageUrl) {
+    await runQuery(masterDb, `UPDATE maps SET image_url = ? WHERE code = ?`, [imageUrl, code]);
+}
+
 // --- Daily Sharding Functions --- //
 
 // Cache for open daily DB connections
@@ -314,6 +318,7 @@ module.exports = {
     upsertMap,
     getAllMaps,
     updateMapLatestMetrics,
+    updateMapImage,
     upsertMetricRecord,
     getHistoryForMap,
     getMapsProcessedToday,

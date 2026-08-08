@@ -47,20 +47,8 @@ async function fetchAndSaveIslandMetadata(code) {
     try {
         const res = await axios.get(`${API_BASE}/islands/${code}`);
         if (res.data) {
-            let mapData = res.data;
-            
-            // Fetch Image from FCHQ
-            try {
-                const fchqRes = await axios.get(`https://fchq.io/api/v1/map/${code}`, { timeout: 5000 });
-                if (fchqRes.data && fchqRes.data.map && fchqRes.data.map.epicImageUrl) {
-                    mapData.image_url = fchqRes.data.map.epicImageUrl;
-                }
-            } catch(fchqErr) {
-                // Silently fail FCHQ if it rate limits us, don't break the whole scrape!
-            }
-            
-            await db.upsertMap(mapData);
-            return mapData;
+            await db.upsertMap(res.data);
+            return res.data;
         }
     } catch(e) {
         if(e.response && e.response.status !== 404) {
@@ -273,6 +261,17 @@ async function runMetricsForMapCodes(codes, phaseName) {
             console.log(`[${i+1}/${codes.length}] 💀 Skipping ${code} (Dead map)`);
             await db.updateMapLatestMetrics(code, mapLatestMetrics);
             continue; 
+        }
+
+        // --- ALIVE MAP LOGIC ---
+        // Since it's alive, fetch the high-res image from FCHQ (Smart Skip)
+        try {
+            const fchqRes = await axios.get(`https://fchq.io/api/v1/map/${code}`, { timeout: 5000 });
+            if (fchqRes.data && fchqRes.data.map && fchqRes.data.map.epicImageUrl) {
+                await db.updateMapImage(code, fchqRes.data.map.epicImageUrl);
+            }
+        } catch (fchqErr) {
+            // Silently fail if FCHQ rate limits
         }
 
         // 3. Fetch Minute and Hour concurrently (2x faster)
