@@ -263,17 +263,6 @@ async function runMetricsForMapCodes(codes, phaseName) {
             continue; 
         }
 
-        // --- ALIVE MAP LOGIC ---
-        // Since it's alive, fetch the high-res image from FCHQ (Smart Skip)
-        try {
-            const fchqRes = await axios.get(`https://fchq.io/api/v1/map/${code}`, { timeout: 5000 });
-            if (fchqRes.data && fchqRes.data.map && fchqRes.data.map.epicImageUrl) {
-                await db.updateMapImage(code, fchqRes.data.map.epicImageUrl);
-            }
-        } catch (fchqErr) {
-            // Silently fail if FCHQ rate limits
-        }
-
         // 3. Fetch Minute and Hour concurrently (2x faster)
         const [minRes, hrRes] = await Promise.all([
             fetchAndSaveMetrics(code, 'minute', 'metrics_minute'),
