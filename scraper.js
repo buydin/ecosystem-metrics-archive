@@ -165,10 +165,19 @@ async function runDiscoveryPhase() {
 async function fetchAndSaveMetrics(code, interval, table) {
     let attempts = 0;
     let res = null;
+    
+    // Dynamically calculate the precise 7-day rolling window for the API
+    const toDate = new Date();
+    const fromDate = new Date();
+    fromDate.setDate(fromDate.getDate() - 7);
+    
+    const toStr = encodeURIComponent(toDate.toISOString());
+    const fromStr = encodeURIComponent(fromDate.toISOString());
+
     while (attempts < 3) {
         attempts++;
         try {
-            res = await axios.get(`${API_BASE}/islands/${code}/metrics/${interval}`, { timeout: 15000 });
+            res = await axios.get(`${API_BASE}/islands/${code}/metrics/${interval}?from=${fromStr}&to=${toStr}`, { timeout: 15000 });
             break;
         } catch (e) {
             if (attempts === 3) return { success: false, error: e };
