@@ -354,10 +354,42 @@ async function runTrackBDiscovery(total, idx) {
     console.log(`=== TRACK B DISCOVERY COMPLETE ===`);
 }
 
+async function runTrackBAll(total, idx) {
+    console.log(`=== STARTING TRACK B (Ultimate Load Balancer) [${idx}/${total}] ===`);
+    if (fs.existsSync('globalRankings.json')) {
+        globalRankings = JSON.parse(fs.readFileSync('globalRankings.json', 'utf8'));
+    }
+    
+    // 1. Get all ranked maps
+    const rankedMapCodes = Object.keys(globalRankings);
+    
+    // 2. Get all discovery maps
+    const allMaps = await db.getAllMaps();
+    let discoveredCodes = allMaps.map(m => m.code).filter(c => !rankedMapCodes.includes(c));
+    
+    // 3. Filter out maps already processed today
+    const today = new Date().toISOString().split('T')[0];
+    const processedToday = await db.getMapsProcessedToday(today);
+    const processedSet = new Set(processedToday);
+    discoveredCodes = discoveredCodes.filter(c => !processedSet.has(c));
+    
+    // 4. Combine them into one massive pool!
+    // We put ranked maps first so they always get priority scraping
+    const allCodesToProcess = [...rankedMapCodes, ...discoveredCodes];
+    
+    // 5. Perfectly slice the massive pool into exactly equal chunks for the 18 servers
+    const chunk = chunkArray(allCodesToProcess, total, idx);
+    console.log(`[Load Balancer] Total maps to process: ${allCodesToProcess.length}. Server #${idx} is processing exactly ${chunk.length} maps!`);
+    
+    await runMetricsForMapCodes(chunk, 'Combined Swarm');
+    console.log(`=== TRACK B SWARM COMPLETE ===`);
+}
+
 module.exports = {
     runTrackA,
     runTrackBGenres,
     runTrackBDiscovery,
+    runTrackBAll,
     runDiscoveryPhase,
     runGenreRankingsPhase,
     runMetricsPhase: () => runMetricsForMapCodes((Object.keys(globalRankings)), 'Manual Metrics'), // Fallback for old API calls

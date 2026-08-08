@@ -31,6 +31,11 @@ async function run() {
         const shardIndex = parseInt(args[2], 10);
         console.log(`--- Starting Track B (Discovery Swarm) Shard ${shardIndex}/${totalShards} ---`);
         await scraper.runTrackBDiscovery(totalShards, shardIndex);
+    } else if (command === 'track-b-all') {
+        const totalShards = parseInt(args[1], 10);
+        const shardIndex = parseInt(args[2], 10);
+        console.log(`--- Starting Track B (Combined Swarm) Shard ${shardIndex}/${totalShards} ---`);
+        await scraper.runTrackBAll(totalShards, shardIndex);
     } else if (command === 'track-c') {
         console.log("--- Starting Track C (Aggregator) ---");
         await scraper.runTrackCAggregator();

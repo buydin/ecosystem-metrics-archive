@@ -80,50 +80,75 @@ function runQuery(db, sql, params = []) {
 }
 
 async function mergeShards() {
-    const today = new Date().toISOString().split('T')[0];
-    const targetDbPath = path.join(DB_DIR, `metrics_${today}.db`);
-    
-    console.log(`Initializing target database: ${targetDbPath}`);
-    await initDailyDb(targetDbPath);
-    
-    const targetDb = new sqlite3.Database(targetDbPath);
-    
-    const files = fs.readdirSync(DB_DIR).filter(f => f.startsWith('shard_') && f.endsWith('.db'));
-    if (files.length === 0) {
-        console.log("No shard databases found to merge.");
-        targetDb.close();
+    const shardsDir = path.join(__dirname, 'shards');
+    if (!fs.existsSync(shardsDir)) {
+        console.log("No shards directory found.");
         return;
     }
     
-    console.log(`Found ${files.length} shards to merge.`);
+    // Find all metrics databases across all shard folders
+    const allFiles = [];
+    const shardFolders = fs.readdirSync(shardsDir);
+    for (const folder of shardFolders) {
+        const folderPath = path.join(shardsDir, folder);
+        if (fs.statSync(folderPath).isDirectory()) {
+            const dbFiles = fs.readdirSync(folderPath).filter(f => f.startsWith('metrics_') && f.endsWith('.db'));
+            for (const f of dbFiles) {
+                allFiles.push({ dateStr: f.replace('metrics_', '').replace('.db', ''), fullPath: path.join(folderPath, f) });
+            }
+        }
+    }
     
-    for (let i = 0; i < files.length; i++) {
-        const shardFile = files[i];
-        const shardPath = path.join(DB_DIR, shardFile);
-        console.log(`Merging shard: ${shardFile}`);
+    if (allFiles.length === 0) {
+        console.log("No metrics databases found in shards.");
+        return;
+    }
+    
+    // Group files by date
+    const dbByDate = {};
+    for (const f of allFiles) {
+        if (!dbByDate[f.dateStr]) dbByDate[f.dateStr] = [];
+        dbByDate[f.dateStr].push(f.fullPath);
+    }
+    
+    console.log(`Found databases for ${Object.keys(dbByDate).length} different days.`);
+    
+    for (const dateStr of Object.keys(dbByDate)) {
+        console.log(`\n=== Merging Day: ${dateStr} ===`);
+        const targetDbPath = path.join(DB_DIR, `metrics_${dateStr}.db`);
+        await initDailyDb(targetDbPath);
+        const targetDb = new sqlite3.Database(targetDbPath);
         
-        const attachName = `shard_${i}`;
+        const shardPaths = dbByDate[dateStr];
+        console.log(`Found ${shardPaths.length} shards for ${dateStr}.`);
         
-        await runQuery(targetDb, `ATTACH DATABASE '${shardPath.replace(/'/g, "''")}' AS ${attachName}`);
-        
-        // Merge tables
-        const tables = ['metrics_minute', 'metrics_hour', 'metrics_day'];
-        for (const table of tables) {
+        for (let i = 0; i < shardPaths.length; i++) {
+            const shardPath = shardPaths[i];
+            const attachName = `shard_${i}`;
+            
             try {
-                await runQuery(targetDb, `
-                    INSERT OR IGNORE INTO ${table} 
-                    SELECT * FROM ${attachName}.${table}
-                `);
+                await runQuery(targetDb, `ATTACH DATABASE '${shardPath.replace(/'/g, "''")}' AS ${attachName}`);
+                
+                const tables = ['metrics_minute', 'metrics_hour', 'metrics_day'];
+                for (const table of tables) {
+                    await runQuery(targetDb, `
+                        INSERT OR IGNORE INTO ${table} 
+                        SELECT * FROM ${attachName}.${table}
+                    `);
+                }
+                
+                await runQuery(targetDb, `DETACH DATABASE ${attachName}`);
             } catch (e) {
-                console.error(`Error merging ${table} from ${shardFile}:`, e);
+                console.error(`Error merging ${shardPath}:`, e.message);
+                try { await runQuery(targetDb, `DETACH DATABASE ${attachName}`); } catch(err){}
             }
         }
         
-        await runQuery(targetDb, `DETACH DATABASE ${attachName}`);
+        targetDb.close();
+        console.log(`Successfully merged all shards into metrics_${dateStr}.db`);
     }
     
-    targetDb.close();
-    console.log("Merge completed successfully.");
+    console.log("\nAll days merged successfully.");
 }
 
 mergeShards().catch(err => {

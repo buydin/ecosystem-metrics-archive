@@ -2,6 +2,9 @@ name: Fortnite Ecosystem Scraper
 run-name: 🚀 Ecosystem Scrape - ${{ github.event_name }} - ${{ github.run_id }}
 
 on:
+  push:
+    branches:
+      - main
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
@@ -11,7 +14,7 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   track-a:
@@ -49,14 +52,14 @@ jobs:
             globalRankings.json
           retention-days: 1
 
-  track-b-genres:
-    name: 🥈 Track B (Genre Swarm ${{ matrix.shard }})
+  track-b-swarm:
+    name: 🥈 Track B (Ultimate Swarm ${{ matrix.shard }})
     needs: track-a
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8]
+        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -81,81 +84,24 @@ jobs:
           mkdir -p db
           mv maps.db db/maps.db || echo "maps.db not in root"
 
-      - name: Run Track B Genres
-        run: node cli.js track-b-genres 9 ${{ matrix.shard }}
-
-      - name: Rename Daily Metrics DB to Shard DB
+      - name: Run Track B (With Auto-Restart)
         run: |
-          TODAY=$(date -u +"%Y-%m-%d")
-          if [ -f "db/metrics_${TODAY}.db" ]; then
-            mv "db/metrics_${TODAY}.db" "db/shard_genre_${{ matrix.shard }}.db"
-          else
-            echo "No metrics DB created for today."
-          fi
+          # The Auto-Restart Wrapper: If the server crashes, it instantly reboots up to 3 times!
+          for i in 1 2 3 4; do
+            node cli.js track-b-all 18 ${{ matrix.shard }} && break || echo "CRASH DETECTED! RESTARTING SERVER ($i/4)..." && sleep 10
+          done
 
-      - name: Upload Shard DB
+      - name: Upload Shard DBs
         uses: actions/upload-artifact@v4
         with:
-          name: shard-genre-${{ matrix.shard }}
-          path: db/shard_genre_${{ matrix.shard }}.db
-          if-no-files-found: ignore
-          retention-days: 1
-
-  track-b-discovery:
-    name: 🥈 Track B (Discovery Swarm ${{ matrix.shard }})
-    needs: track-a
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [0, 1, 2, 3, 4, 5, 6, 7, 8]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci || npm install
-
-      - name: Download Track A Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: track-a-artifacts
-          path: .
-
-      - name: Move maps.db to db folder
-        run: |
-          mkdir -p db
-          mv maps.db db/maps.db || echo "maps.db not in root"
-
-      - name: Run Track B Discovery
-        run: node cli.js track-b-discovery 9 ${{ matrix.shard }}
-
-      - name: Rename Daily Metrics DB to Shard DB
-        run: |
-          TODAY=$(date -u +"%Y-%m-%d")
-          if [ -f "db/metrics_${TODAY}.db" ]; then
-            mv "db/metrics_${TODAY}.db" "db/shard_discovery_${{ matrix.shard }}.db"
-          else
-            echo "No metrics DB created for today."
-          fi
-
-      - name: Upload Shard DB
-        uses: actions/upload-artifact@v4
-        with:
-          name: shard-discovery-${{ matrix.shard }}
-          path: db/shard_discovery_${{ matrix.shard }}.db
+          name: shard-${{ matrix.shard }}
+          path: db/metrics_*.db
           if-no-files-found: ignore
           retention-days: 1
 
   track-c:
     name: 🥉 Track C (Aggregator)
-    needs: [track-b-genres, track-b-discovery]
+    needs: track-b-swarm
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -170,23 +116,23 @@ jobs:
       - name: Install dependencies
         run: npm ci || npm install
 
+      - name: Download all shard artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: shards
+          pattern: shard-*
+
+      - name: Move maps.db to db folder
+        run: |
+          # We need to manually download maps.db from Track A since it's not in the shards
+          mkdir -p db
       - name: Download Track A Artifacts
         uses: actions/download-artifact@v4
         with:
           name: track-a-artifacts
           path: .
-
-      - name: Move maps.db to db folder
-        run: |
-          mkdir -p db
-          mv maps.db db/maps.db || echo "maps.db not in root"
-
-      - name: Download Shard Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: db
-          pattern: shard-*
-          merge-multiple: true
+      - name: Move maps.db
+        run: mv maps.db db/maps.db || echo "maps.db not found"
 
       - name: Merge Shards
         run: node mergeShards.js
@@ -204,8 +150,8 @@ jobs:
           
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Updating release $TAG"
-            gh release upload "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_${TODAY}.db --clobber
+            gh release upload "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_*.db --clobber
           else
             echo "Creating release $TAG"
-            gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_${TODAY}.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
+            gh release create "$TAG" db/EcosystemMaster.db db/ActiveMaps.db db/ArchivedMaps.db db/metrics_*.db --title "Daily Metrics: $TODAY" --notes "Automated ecosystem scrape for $TODAY."
           fi
